@@ -1,0 +1,93 @@
+version: '3'
+services:
+    php:
+        build:
+            context: .
+            dockerfile: ./infrastructure/docker/phpfpm.Dockerfile
+        image: php-avivo
+        container_name: php-avivo-container
+        ports:
+          - 6001:6001
+        volumes:
+            - ./:/var/www/html:cached
+            - ./infrastructure/docker/phpfpm/.bashrc:/home/.bashrc:cached
+            - ./infrastructure/docker/phpfpm/.bashrc:/home/www-data/.bashrc:cached
+            - ./infrastructure/docker/phpfpm/conf.d/custom.ini:/usr/local/etc/php/conf.d/custom.ini
+        networks:
+            avivo-platform-net:
+                ipv4_address: 172.120.6.3
+
+    nginx:
+        build:
+            context: .
+            dockerfile: infrastructure/docker/nginx.Dockerfile
+        image: nginx-avivo
+        container_name: nginx-avivo-container
+        links:
+            - php
+        volumes:
+            - ./infrastructure/docker/nginx/conf.d:/etc/nginx/conf.d:cached
+            - ./public:/var/www/html/public:cached
+            - ./storage/app:/var/www/html/storage/app:cached
+            - ./storage/nginx-logs:/var/log/nginx:cached
+        ports:
+            - "80:80"
+        expose:
+            - 80
+        networks:
+            avivo-platform-net:
+                ipv4_address: 172.120.6.4
+
+    node:
+        build:
+            context: .
+            dockerfile: ./infrastructure/docker/node.Dockerfile
+        links:
+            - php
+            - nginx
+        image: node-avivo
+        container_name: node-avivo-container
+        volumes:
+            - ./:/var/www/html:cached
+        working_dir: /var/www/html
+        tty: true
+        ports:
+            - 8080:8080
+            - 5173:5173
+        expose:
+            - 8080
+            - 5173
+        environment:
+            HOST: "0.0.0.0"
+            GIT_SSL_NO_VERIFY: "true"
+        networks:
+            avivo-platform-net:
+                ipv4_address: 172.120.6.5
+
+    mysql:
+        build:
+            context: .
+            dockerfile: infrastructure/docker/mysql.Dockerfile
+        image: mysql-avivo
+        container_name: mysql-avivo-container
+        environment:
+            MYSQL_DATABASE: avivo
+            MYSQL_PASSWORD: root
+            MYSQL_ROOT_PASSWORD: Admin@00
+        ports:
+            - "3306:3306"
+        volumes:
+            - ./storage/mysql-data:/var/lib/mysql:cached
+        networks:
+            avivo-platform-net:
+                ipv4_address: 172.120.6.6
+
+networks:
+    avivo-platform-net:
+        driver: bridge
+        ipam:
+            driver: default
+            config:
+                -   subnet: 172.120.6.0/24
+        driver_opts:
+            com.docker.network.bridge.name: avivo-network
